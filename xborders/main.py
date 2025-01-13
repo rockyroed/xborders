@@ -172,7 +172,7 @@ def get_args():
                         args.__dict__[ident] = dat[
                             ident
                         ]  # Idea gotten from here: https://stackoverflow.com/a/1325798
-        except:
+        except FileNotFoundError:
             print("WARNING: Config file not found, using default configuration.")
 
     global BORDER_RADIUS
