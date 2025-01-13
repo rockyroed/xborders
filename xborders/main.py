@@ -159,17 +159,20 @@ def get_args():
 
     # Extract the literal values
     if args.config is not None:
-        with open(args.config, "r") as f:
-            raw = f.read().replace("-", "_")
-            dat = json.loads(raw)
-            for ident in dat:
-                if ident == "border_rgba":
-                    args.border_rgba = dat[ident]
-                    set_border_rgba(args)
-                else:
-                    args.__dict__[ident] = dat[
-                        ident
-                    ]  # Idea gotten from here: https://stackoverflow.com/a/1325798
+        try:
+            with open(args.config, "r") as f:
+                raw = f.read().replace("-", "_")
+                dat = json.loads(raw)
+                for ident in dat:
+                    if ident == "border_rgba":
+                        args.border_rgba = dat[ident]
+                        set_border_rgba(args)
+                    else:
+                        args.__dict__[ident] = dat[
+                            ident
+                        ]  # Idea gotten from here: https://stackoverflow.com/a/1325798
+        except:
+            print("WARNING: Config file not found, using default configuration.")
 
     global BORDER_RADIUS
     global BORDER_WIDTH
