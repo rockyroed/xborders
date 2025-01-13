@@ -36,6 +36,8 @@ OFFSETS = [0, 0, 0, 0]
 
 
 def set_border_rgba(args):
+    args.border_rgba = args.border_rgba.replace("0x", "#") # Handle both hex formats
+
     try:
         literal_value = int(args.border_rgba.replace("#", "0x"), 16)
     except:
