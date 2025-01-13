@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xborders"
+version = "3.4"
+description = "Active window border replacement for window managers."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["wm", "i3", "border"]
+dependencies = [
+    "pygobject",
+    "pycairo==1.21.0",
+    "requests==2.28.1",
+]
+
+[project.scripts]
+xborders = "xborders.main:main"
