@@ -62,7 +62,8 @@ def get_args():
     parser.add_argument(
         "--config", "-c",
         type=str,
-        help="The path to the config file"
+        help="The path to the config file. Default is .config/xborders/xborders.json",
+        default= os.path.join(os.path.expanduser("~"), ".config", "xborders", "xborders.json")
     )
     parser.add_argument(
         "--border-radius",
