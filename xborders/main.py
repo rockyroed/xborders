@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import webbrowser
+import time
 
 import cairo
 import gi
@@ -33,6 +34,10 @@ BORDER_A = 1
 SMART_HIDE_BORDER = False
 NO_VERSION_NOTIFY = False
 OFFSETS = [0, 0, 0, 0]
+FADE = False
+FADE_IN_STEP = 0.05
+FADE_OUT_STEP = 0.05
+FADE_DELTA = 10
 
 
 def set_border_rgba(args):
@@ -147,6 +152,34 @@ def get_args():
         help="How much to increase the windows size downwards."
     )
     parser.add_argument(
+        "--fade",
+        action="store_true",
+        help="Fade borders in/out when the active window changes."
+    )
+    parser.add_argument(
+        "--fade-in-step",
+        default=0.05,
+        type=float,
+        help="Opacity change between steps while fading in."
+    )
+    parser.add_argument(
+        "--fade-out-step",
+        default=0.05,
+        type=float,
+        help="Opacity change between steps while fading out."
+    )
+    parser.add_argument(
+        "--fade-step",
+        type=float,
+        help="Opacity change between steps while fading. Overwrites both fade in and fade out."
+    )
+    parser.add_argument(
+        "--fade-delta",
+        default=10,
+        type=int,
+        help="The time between steps in fade step, in milliseconds."
+    )
+    parser.add_argument(
         "--version",
         action="store_true",
         help="Print the version of xborders and exit."
@@ -157,6 +190,8 @@ def get_args():
         exit(0)
     if args.border_rgba is not None:
         set_border_rgba(args)
+    if args.fade_out_step:
+        raise NotImplementedError("Fading out has not been implemented yet")
 
     # Extract the literal values
     if args.config is not None:
@@ -168,6 +203,8 @@ def get_args():
                     if ident == "border_rgba":
                         args.border_rgba = dat[ident]
                         set_border_rgba(args)
+                    elif args.fade_out_step:
+                        raise NotImplementedError("Fading out has not been implemented yet")
                     else:
                         args.__dict__[ident] = dat[
                             ident
@@ -185,6 +222,10 @@ def get_args():
     global SMART_HIDE_BORDER
     global NO_VERSION_NOTIFY
     global OFFSETS
+    global FADE
+    global FADE_IN_STEP
+    global FADE_OUT_STEP
+    global FADE_DELTA
 
     BORDER_RADIUS = args.border_radius
     BORDER_WIDTH = args.border_width
@@ -200,6 +241,14 @@ def get_args():
         args.negative_x_offset or 0,
         args.negative_y_offset or 0
     ]
+    FADE = args.fade
+    FADE_DELTA = args.fade_delta
+
+    if args.fade_step:
+        FADE_IN_STEP = FADE_OUT_STEP = args.fade_step
+    else:
+        FADE_IN_STEP = args.fade_in_step
+        FADE_OUT_STEP = args.fade_out_step
 
     if args.border_mode in BORDER_MODES:
         BORDER_MODE = args.border_mode
@@ -322,6 +371,8 @@ class Highlight(Gtk.Window):
         self._composited_changed_event(None)
         self._active_window_changed_event(None, None)
         self._geometry_changed_event(None)
+        
+        self.alpha = 0
 
     # This triggers every time the window composited state changes.
     # https://docs.gtk.org/gtk3/signal.Widget.composited-changed.html
@@ -381,7 +432,13 @@ class Highlight(Gtk.Window):
             self.old_window = active_window
 
             self._calc_border_geometry(active_window)
-        self.queue_draw()
+
+        if FADE:
+            self.alpha = 0
+            GObject.timeout_add(FADE_DELTA, self.fade_in)
+        else:
+            self.alpha = BORDER_A
+            self.queue_draw()
 
     def _state_changed_event(self, active_window, _changed_mask, new_state):
         if new_state & Wnck.WindowState.FULLSCREEN != 0:
@@ -434,6 +491,12 @@ class Highlight(Gtk.Window):
         # Center
         self.border_path = [x, y, w, h]
 
+    def fade_in(self):
+        self.alpha = min(self.alpha + FADE_IN_STEP, 1)
+        self.queue_draw()
+
+        return self.alpha < BORDER_A
+
     def _draw(self, _wid, ctx):
         ctx.save()
         if self.border_path != [0, 0, 0, 0]:
@@ -449,7 +512,7 @@ class Highlight(Gtk.Window):
                 else:
                     ctx.rectangle(x, y, w, h)
 
-                ctx.set_source_rgba(BORDER_R / 255, BORDER_G / 255, BORDER_B / 255, BORDER_A)
+                ctx.set_source_rgba(BORDER_R / 255, BORDER_G / 255, BORDER_B / 255, self.alpha)
                 ctx.set_line_width(BORDER_WIDTH)
                 ctx.stroke()
         ctx.restore()
