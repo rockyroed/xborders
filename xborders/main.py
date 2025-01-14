@@ -3,10 +3,8 @@ import argparse
 import json
 import os
 import subprocess
-import sys
 import threading
 import webbrowser
-import time
 
 import cairo
 import gi
