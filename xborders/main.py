@@ -162,7 +162,6 @@ def get_args():
     )
     parser.add_argument(
         "--fade-out-step",
-        default=0.05,
         type=float,
         help="Opacity change between steps while fading out."
     )
