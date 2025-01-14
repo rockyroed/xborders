@@ -5,6 +5,7 @@ import os
 import subprocess
 import threading
 import webbrowser
+from collections import namedtuple
 
 import cairo
 import gi
@@ -37,6 +38,7 @@ FADE_IN_STEP = 0.05
 FADE_OUT_STEP = 0.05
 FADE_DELTA = 10
 
+Border = namedtuple("Border", ["path", "alpha", "fade"])
 
 def set_border_rgba(args):
     args.border_rgba = args.border_rgba.replace("0x", "#") # Handle both hex formats
@@ -356,7 +358,7 @@ class Highlight(Gtk.Window):
         self.set_keep_above(True)
         self.set_title("xborders")
         self.show_all()
-        self.border_path = [0, 0, 0, 0]
+        self.borders = {}
 
         # Event connection:
         self.connect("draw", self._draw)
@@ -368,8 +370,6 @@ class Highlight(Gtk.Window):
         self._composited_changed_event(None)
         self._active_window_changed_event(None, None)
         self._geometry_changed_event(None)
-        
-        self.alpha = 0
 
     # This triggers every time the window composited state changes.
     # https://docs.gtk.org/gtk3/signal.Widget.composited-changed.html
@@ -397,6 +397,10 @@ class Highlight(Gtk.Window):
     # class: https://lazka.github.io/pgi-docs/Wnck-3.0/classes/Window.html#signals
     def _active_window_changed_event(self, _screen, _previous_active_window):
         if self.old_window and len(self.old_signals_to_disconnect) > 0:
+            if FADE:
+                self.fade_out_border(self.old_window.get_xid())
+            else:
+                self.clear_border(self.old_window.get_xid())
             for sig_id in self.old_signals_to_disconnect:
                 GObject.signal_handler_disconnect(self.old_window, sig_id)
 
@@ -404,6 +408,8 @@ class Highlight(Gtk.Window):
         self.old_window = None
 
         active_window = self.wnck_screen.get_active_window()
+
+        xid = active_window.get_xid() if active_window else 0
 
         self.border_path = [0, 0, 0, 0]
         if active_window is not None and not (SMART_HIDE_BORDER and self.is_alone_in_workspace()):
@@ -428,14 +434,16 @@ class Highlight(Gtk.Window):
 
             self.old_window = active_window
 
-            self._calc_border_geometry(active_window)
+            border_path = self._calc_border_geometry(active_window)
 
-        if FADE:
-            self.alpha = 0
-            GObject.timeout_add(FADE_DELTA, self.fade_in)
+        if FADE and xid:
+            self.add_border(xid, border_path)
+            self.fade_in_border(xid)
+        elif xid:
+            self.add_border(xid, border_path)
+            self.draw_border(xid)
         else:
-            self.alpha = BORDER_A
-            self.queue_draw()
+            self.clear_borders()
 
     def _state_changed_event(self, active_window, _changed_mask, new_state):
         if new_state & Wnck.WindowState.FULLSCREEN != 0:
@@ -459,6 +467,7 @@ class Highlight(Gtk.Window):
             return
         # TODO(kay:) Find out why `get_geometry` works better than `get_client_window_geometry` on Gnome but for some windows it doesnt
         x, y, w, h = window.get_client_window_geometry()
+        xid = window.get_xid()
 
         # Inside
         if BORDER_MODE == INSIDE:
@@ -486,32 +495,84 @@ class Highlight(Gtk.Window):
         h += OFFSETS[3] or 0
 
         # Center
-        self.border_path = [x, y, w, h]
+        return [x, y, w, h]
+    
+    def add_border(self, xid, path):
+        self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
-    def fade_in(self):
-        self.alpha = min(self.alpha + FADE_IN_STEP, 1)
+    def fade(self):
+        for border in self.borders.values():
+            if border["fade"] == "in":
+                border["alpha"] = min(border["alpha"] + FADE_IN_STEP, 1)
+                border["fade"] = None if border["alpha"] == BORDER_A else "in"
+            elif border["fade"] == "out":
+                 border["alpha"] = max(border["alpha"] - FADE_OUT_STEP, 0)
+                 border["fade"] = None if border["alpha"] == 0 else "out"
+
+        self.queue_draw()
+        return len([border for border in self.borders.values() if border["fade"]])
+
+    def fade_in_border(self, xid):
+        #print("fade in")
+        if xid in self.borders.keys():
+            self.borders[xid]["fade"] = "in"
+
+            if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list
+                GObject.timeout_add(FADE_DELTA, self.fade)
+        else:
+            raise ValueError("Cannot find border")
+    
+    def fade_out_border(self, xid):
+        if xid in self.borders.keys():
+            self.borders[xid]["fade"] = "out"
+
+            if len([border for border in self.borders.values() if border["fade"]]) == 1:
+                GObject.timeout_add(FADE_DELTA, self.fade)
+        else:
+            raise ValueError("Cannot find border")
+    
+    def draw_border(self, xid):
+        if xid in self.borders.keys():
+            self.borders[xid]["alpha"] = BORDER_A
+            self.queue_draw()
+        else:
+            raise ValueError("Cannot find border")
+    
+    def clear_border(self, xid):
+        if xid in self.borders.keys():
+            del self.borders[xid]
+            self.queue_draw()
+        else:
+            raise ValueError("Cannot find border")
+    
+    def clear_borders(self):
+        self.borders.clear()
         self.queue_draw()
 
-        return self.alpha < BORDER_A
 
     def _draw(self, _wid, ctx):
-        ctx.save()
-        if self.border_path != [0, 0, 0, 0]:
-            x, y, w, h = self.border_path
-            if BORDER_WIDTH != 0:
-                if BORDER_RADIUS > 0:
-                    degrees = 0.017453292519943295  # pi/180
-                    ctx.arc(x + w - BORDER_RADIUS, y + BORDER_RADIUS, BORDER_RADIUS, -90 * degrees, 0 * degrees)
-                    ctx.arc(x + w - BORDER_RADIUS, y + h - BORDER_RADIUS, BORDER_RADIUS, 0 * degrees, 90 * degrees)
-                    ctx.arc(x + BORDER_RADIUS, y + h - BORDER_RADIUS, BORDER_RADIUS, 90 * degrees, 180 * degrees)
-                    ctx.arc(x + BORDER_RADIUS, y + BORDER_RADIUS, BORDER_RADIUS, 180 * degrees, 270 * degrees)
-                    ctx.close_path()
-                else:
-                    ctx.rectangle(x, y, w, h)
+        #print("draw")
+        ctx.save() 
+        for xid, border in self.borders.items():
+            if border["path"] != [0, 0, 0, 0]:
+                x, y, w, h = border["path"]
+                if BORDER_WIDTH != 0:
+                    if BORDER_RADIUS > 0:
+                        degrees = 0.017453292519943295  # pi/180
+                        ctx.arc(x + w - BORDER_RADIUS, y + BORDER_RADIUS, BORDER_RADIUS, -90 * degrees, 0 * degrees)
+                        ctx.arc(x + w - BORDER_RADIUS, y + h - BORDER_RADIUS, BORDER_RADIUS, 0 * degrees, 90 * degrees)
+                        ctx.arc(x + BORDER_RADIUS, y + h - BORDER_RADIUS, BORDER_RADIUS, 90 * degrees, 180 * degrees)
+                        ctx.arc(x + BORDER_RADIUS, y + BORDER_RADIUS, BORDER_RADIUS, 180 * degrees, 270 * degrees)
+                        ctx.close_path()
+                    else:
+                        ctx.rectangle(x, y, w, h)
 
-                ctx.set_source_rgba(BORDER_R / 255, BORDER_G / 255, BORDER_B / 255, self.alpha)
-                ctx.set_line_width(BORDER_WIDTH)
-                ctx.stroke()
+                    ctx.set_source_rgba(BORDER_R / 255, BORDER_G / 255, BORDER_B / 255, border["alpha"])
+                    ctx.set_line_width(BORDER_WIDTH)
+                    ctx.stroke()
+
+        self.borders = {xid: border for xid, border in self.borders.items() if border["alpha"] or border["fade"]}
+
         ctx.restore()
 
 
