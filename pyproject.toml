@@ -8,7 +8,6 @@ version = "3.4"
 description = "Active window border replacement for window managers."
 readme = "README.md"
 license = {file = "LICENSE"}
-keywords = ["wm", "i3", "border"]
 dependencies = [
     "pygobject",
     "pycairo==1.21.0",
