@@ -5,6 +5,7 @@ import os
 import subprocess
 import threading
 import webbrowser
+import time
 
 import cairo
 import gi
@@ -36,6 +37,7 @@ FADE = False
 FADE_IN_STEP = 0.05
 FADE_OUT_STEP = 0.05
 FADE_DELTA = 10
+DISCARD_INACTIVE_WORKSPACE = False
 
 def set_border_rgba(args):
     args.border_rgba = args.border_rgba.replace("0x", "#") # Handle both hex formats
@@ -176,6 +178,12 @@ def get_args():
         help="The time between steps in fade step, in milliseconds."
     )
     parser.add_argument(
+        "--discard-inactive-workspace",
+        default=False,
+        action='store_true',
+        help="Discard all borders not in the active workspace, may improve performance with a large amount of windows."
+    )
+    parser.add_argument(
         "--version",
         action="store_true",
         help="Print the version of xborders and exit."
@@ -218,6 +226,7 @@ def get_args():
     global FADE_IN_STEP
     global FADE_OUT_STEP
     global FADE_DELTA
+    global DISCARD_INACTIVE_WORKSPACE
 
     BORDER_RADIUS = args.border_radius
     BORDER_WIDTH = args.border_width
@@ -235,6 +244,7 @@ def get_args():
     ]
     FADE = args.fade
     FADE_DELTA = args.fade_delta
+    DISCARD_INACTIVE_WORKSPACE = args.discard_inactive_workspace
 
     if BORDER_A == 0:
         print("Invisible border, exiting.")
@@ -356,12 +366,14 @@ class Highlight(Gtk.Window):
         self.set_title("xborders")
         self.show_all()
         self.borders = {}
+        self.workspace = 0
 
         # Event connection:
         self.connect("draw", self._draw)
         self.connect("destroy", Gtk.main_quit)
         self.connect('composited-changed', self._composited_changed_event)
         self.wnck_screen.connect("active-window-changed", self._active_window_changed_event)
+        # self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event)
 
         # Call initial events
         self._composited_changed_event(None)
@@ -371,6 +383,7 @@ class Highlight(Gtk.Window):
     # This triggers every time the window composited state changes.
     # https://docs.gtk.org/gtk3/signal.Widget.composited-changed.html
     def _composited_changed_event(self, _arg):
+        print("test")
         if self.screen.is_composited():
             self.move(0, 0)
         else:
@@ -386,6 +399,7 @@ class Highlight(Gtk.Window):
         workspace = Wnck.Screen.get_active_workspace(self.wnck_screen)
         windows = Wnck.Screen.get_windows(self.wnck_screen)
         windows_on_workspace = list(filter(lambda w: w.is_visible_on_workspace(workspace), windows))
+        print([window.get_xid() for window in windows_on_workspace])
         return len(windows_on_workspace) == 1
 
     # This event will trigger every active window change, it will queue a border to be drawn and then do nothing.
@@ -397,18 +411,16 @@ class Highlight(Gtk.Window):
 
         if self.old_window and len(self.old_signals_to_disconnect) > 0:
             is_workspace_same = self.wnck_screen.get_active_window() and self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number()
-            print(is_workspace_same)
+
             if FADE and is_workspace_same:
-                print(self.old_window.get_workspace().get_number())
-                self.fade_out_border(self.old_window.get_xid()) # TODO: call clear_borders if the workspace changes
+                self.fade_out_border(self.old_window.get_xid())
             elif is_workspace_same:
                 self.clear_border(self.old_window.get_xid())
-            else:
-                print("Workspace changed")
+            elif DISCARD_INACTIVE_WORKSPACE:
                 self.clear_borders()
             for sig_id in self.old_signals_to_disconnect:
                 GObject.signal_handler_disconnect(self.old_window, sig_id)
-
+                
         self.old_signals_to_disconnect = []
         self.old_window = None
 
@@ -441,7 +453,9 @@ class Highlight(Gtk.Window):
 
             border_path = self._calc_border_geometry(active_window)
 
-        if FADE and xid and is_workspace_same:
+            self.workspace = active_window.get_workspace().get_number()
+
+        if FADE and xid and not (not is_workspace_same and DISCARD_INACTIVE_WORKSPACE):
             self.add_border(xid, border_path)
             self.fade_in_border(xid)
         elif xid:
@@ -557,7 +571,8 @@ class Highlight(Gtk.Window):
     def _draw(self, _wid, ctx):
         ctx.save() 
         for xid, border in self.borders.items():
-            if border["path"] != [0, 0, 0, 0]:
+            test = Wnck.Window.get(xid).get_workspace().get_number() == self.workspace
+            if border["path"] != [0, 0, 0, 0] and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: # get_workspace should not be called here but should be a property of the border
                 x, y, w, h = border["path"]
                 if BORDER_WIDTH != 0:
                     if BORDER_RADIUS > 0:
