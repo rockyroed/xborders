@@ -5,7 +5,6 @@ import os
 import subprocess
 import threading
 import webbrowser
-from collections import namedtuple
 
 import cairo
 import gi
@@ -37,8 +36,6 @@ FADE = False
 FADE_IN_STEP = 0.05
 FADE_OUT_STEP = 0.05
 FADE_DELTA = 10
-
-Border = namedtuple("Border", ["path", "alpha", "fade"])
 
 def set_border_rgba(args):
     args.border_rgba = args.border_rgba.replace("0x", "#") # Handle both hex formats
@@ -189,8 +186,6 @@ def get_args():
         exit(0)
     if args.border_rgba is not None:
         set_border_rgba(args)
-    if args.fade_out_step:
-        raise NotImplementedError("Fading out has not been implemented yet")
 
     # Extract the literal values
     if args.config is not None:
@@ -202,8 +197,6 @@ def get_args():
                     if ident == "border_rgba":
                         args.border_rgba = dat[ident]
                         set_border_rgba(args)
-                    elif args.fade_out_step:
-                        raise NotImplementedError("Fading out has not been implemented yet")
                     else:
                         args.__dict__[ident] = dat[
                             ident
@@ -242,6 +235,10 @@ def get_args():
     ]
     FADE = args.fade
     FADE_DELTA = args.fade_delta
+
+    if BORDER_A == 0:
+        print("Invisible border, exiting.")
+        exit(0)
 
     if args.fade_step:
         FADE_IN_STEP = FADE_OUT_STEP = args.fade_step
@@ -498,12 +495,14 @@ class Highlight(Gtk.Window):
         return [x, y, w, h]
     
     def add_border(self, xid, path):
-        self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
+        if xid not in self.borders.keys():
+            self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
     def fade(self):
+        print(self.borders)
         for border in self.borders.values():
             if border["fade"] == "in":
-                border["alpha"] = min(border["alpha"] + FADE_IN_STEP, 1)
+                border["alpha"] = min(border["alpha"] + FADE_IN_STEP, BORDER_A)
                 border["fade"] = None if border["alpha"] == BORDER_A else "in"
             elif border["fade"] == "out":
                  border["alpha"] = max(border["alpha"] - FADE_OUT_STEP, 0)
