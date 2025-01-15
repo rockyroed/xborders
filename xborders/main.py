@@ -393,11 +393,19 @@ class Highlight(Gtk.Window):
     # https://lazka.github.io/pgi-docs/Wnck-3.0/classes/Screen.html#signals Signals available for the Wnck.Window
     # class: https://lazka.github.io/pgi-docs/Wnck-3.0/classes/Window.html#signals
     def _active_window_changed_event(self, _screen, _previous_active_window):
+        is_workspace_same = True # Ugly
+
         if self.old_window and len(self.old_signals_to_disconnect) > 0:
-            if FADE:
-                self.fade_out_border(self.old_window.get_xid())
-            else:
+            is_workspace_same = self.wnck_screen.get_active_window() and self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number()
+            print(is_workspace_same)
+            if FADE and is_workspace_same:
+                print(self.old_window.get_workspace().get_number())
+                self.fade_out_border(self.old_window.get_xid()) # TODO: call clear_borders if the workspace changes
+            elif is_workspace_same:
                 self.clear_border(self.old_window.get_xid())
+            else:
+                print("Workspace changed")
+                self.clear_borders()
             for sig_id in self.old_signals_to_disconnect:
                 GObject.signal_handler_disconnect(self.old_window, sig_id)
 
@@ -433,7 +441,7 @@ class Highlight(Gtk.Window):
 
             border_path = self._calc_border_geometry(active_window)
 
-        if FADE and xid:
+        if FADE and xid and is_workspace_same:
             self.add_border(xid, border_path)
             self.fade_in_border(xid)
         elif xid:
