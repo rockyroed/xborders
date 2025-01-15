@@ -464,7 +464,6 @@ class Highlight(Gtk.Window):
             return
         # TODO(kay:) Find out why `get_geometry` works better than `get_client_window_geometry` on Gnome but for some windows it doesnt
         x, y, w, h = window.get_client_window_geometry()
-        xid = window.get_xid()
 
         # Inside
         if BORDER_MODE == INSIDE:
@@ -499,7 +498,6 @@ class Highlight(Gtk.Window):
             self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
     def fade(self):
-        print(self.borders)
         for border in self.borders.values():
             if border["fade"] == "in":
                 border["alpha"] = min(border["alpha"] + FADE_IN_STEP, BORDER_A)
@@ -512,7 +510,6 @@ class Highlight(Gtk.Window):
         return len([border for border in self.borders.values() if border["fade"]])
 
     def fade_in_border(self, xid):
-        #print("fade in")
         if xid in self.borders.keys():
             self.borders[xid]["fade"] = "in"
 
@@ -550,7 +547,6 @@ class Highlight(Gtk.Window):
 
 
     def _draw(self, _wid, ctx):
-        #print("draw")
         ctx.save() 
         for xid, border in self.borders.items():
             if border["path"] != [0, 0, 0, 0]:
