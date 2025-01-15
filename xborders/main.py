@@ -15,7 +15,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Wnck", "3.0")
 gi.require_version("GObject", "2.0")
-from gi.repository import Gtk, Gdk, Wnck, GObject
+gi.require_version("GLib", "2.0")
+from gi.repository import Gtk, Gdk, Wnck, GObject, GLib
 
 VERSION = 3.4
 
@@ -367,13 +368,14 @@ class Highlight(Gtk.Window):
         self.show_all()
         self.borders = {}
         self.workspace = 0
+        self.fade_called = 0
 
         # Event connection:
         self.connect("draw", self._draw)
         self.connect("destroy", Gtk.main_quit)
         self.connect('composited-changed', self._composited_changed_event)
         self.wnck_screen.connect("active-window-changed", self._active_window_changed_event)
-        # self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event)
+        # self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event) # TODO: Handle this
 
         # Call initial events
         self._composited_changed_event(None)
@@ -410,14 +412,14 @@ class Highlight(Gtk.Window):
         is_workspace_same = True # Ugly
 
         if self.old_window and len(self.old_signals_to_disconnect) > 0:
-            is_workspace_same = self.wnck_screen.get_active_window() and self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number()
+            is_workspace_same = self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number() if self.wnck_screen.get_active_window() else True
 
-            if FADE and is_workspace_same:
+            if FADE and not (DISCARD_INACTIVE_WORKSPACE and not is_workspace_same):
                 self.fade_out_border(self.old_window.get_xid())
-            elif is_workspace_same:
-                self.clear_border(self.old_window.get_xid())
-            elif DISCARD_INACTIVE_WORKSPACE:
+            else:
+                print("clear all")
                 self.clear_borders()
+
             for sig_id in self.old_signals_to_disconnect:
                 GObject.signal_handler_disconnect(self.old_window, sig_id)
                 
@@ -455,7 +457,7 @@ class Highlight(Gtk.Window):
 
             self.workspace = active_window.get_workspace().get_number()
 
-        if FADE and xid and not (not is_workspace_same and DISCARD_INACTIVE_WORKSPACE):
+        if xid and FADE and is_workspace_same: # Makes borders fade in from 0 on workspace change, not good. add_border does check for duplicates though
             self.add_border(xid, border_path)
             self.fade_in_border(xid)
         elif xid:
@@ -515,11 +517,18 @@ class Highlight(Gtk.Window):
         # Center
         return [x, y, w, h]
     
+
+    def instant_timeout_add(self, interval, function, *params):
+        function(*params)
+        GLib.timeout_add(interval, function, *params) # Find out why timeout_add_full is missing, would be a nice option to minimize latency
+        #GLib.timeout_add_full(GLib.PRIORITY_HIGH, interval, function, *params)
+    
     def add_border(self, xid, path):
         if xid not in self.borders.keys():
             self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
     def fade(self):
+        print(round(time.time() * 1000) - self.fade_called)
         for border in self.borders.values():
             if border["fade"] == "in":
                 border["alpha"] = min(border["alpha"] + FADE_IN_STEP, BORDER_A)
@@ -536,7 +545,8 @@ class Highlight(Gtk.Window):
             self.borders[xid]["fade"] = "in"
 
             if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list
-                GObject.timeout_add(FADE_DELTA, self.fade)
+                self.fade_called = round(time.time() * 1000)
+                self.instant_timeout_add(FADE_DELTA, self.fade)
         else:
             raise ValueError("Cannot find border")
     
@@ -545,7 +555,8 @@ class Highlight(Gtk.Window):
             self.borders[xid]["fade"] = "out"
 
             if len([border for border in self.borders.values() if border["fade"]]) == 1:
-                GObject.timeout_add(FADE_DELTA, self.fade)
+                self.fade_called = round(time.time() * 1000)
+                self.instant_timeout_add(FADE_DELTA, self.fade)
         else:
             raise ValueError("Cannot find border")
     
@@ -571,8 +582,8 @@ class Highlight(Gtk.Window):
     def _draw(self, _wid, ctx):
         ctx.save() 
         for xid, border in self.borders.items():
-            test = Wnck.Window.get(xid).get_workspace().get_number() == self.workspace
-            if border["path"] != [0, 0, 0, 0] and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: # get_workspace should not be called here but should be a property of the border
+            #get_workspace should not be called here but should be a property of the border
+            if border["path"] != [0, 0, 0, 0] and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: #only draw border if it's in the current workspace
                 x, y, w, h = border["path"]
                 if BORDER_WIDTH != 0:
                     if BORDER_RADIUS > 0:
