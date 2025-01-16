@@ -411,7 +411,7 @@ class Highlight(Gtk.Window):
             is_workspace_same = self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number() if self.wnck_screen.get_active_window() else True
 
             if FADE and (is_workspace_same or not DISCARD_INACTIVE_WORKSPACE): # Really buggy
-                self.fade_out_border(self.old_window.get_xid())
+                self.fade_border(self.old_window.get_xid(), "out")
             else:
                 self.clear_borders()
 
@@ -454,7 +454,7 @@ class Highlight(Gtk.Window):
 
         if xid and FADE and is_workspace_same: # Makes borders fade in from 0 on workspace change, not good. add_border does check for duplicates though
             self.add_border(xid, border_path)
-            self.fade_in_border(xid)
+            self.fade_border(xid, "in")
         elif xid:
             self.add_border(xid, border_path)
             self.draw_border(xid)
@@ -535,21 +535,14 @@ class Highlight(Gtk.Window):
         self.queue_draw()
         return len([border for border in self.borders.values() if border["fade"]])
 
-    def fade_in_border(self, xid):
-        if xid in self.borders.keys():
-            self.borders[xid]["fade"] = "in"
+    def fade_border(self, xid, direction):
+        if xid in self.borders.keys() and direction in ["in", "out"]:
+            self.borders[xid]["fade"] = direction
 
             if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list
                 self.instant_timeout_add(FADE_DELTA, self.fade)
-        else:
-            raise ValueError("Cannot find border")
-    
-    def fade_out_border(self, xid):
-        if xid in self.borders.keys():
-            self.borders[xid]["fade"] = "out"
-
-            if len([border for border in self.borders.values() if border["fade"]]) == 1:
-                self.instant_timeout_add(FADE_DELTA, self.fade)
+        elif direction not in ["in", "out"]:
+            raise ValueError("Direction must be 'in' or 'out'")
         else:
             raise ValueError("Cannot find border")
     
@@ -585,6 +578,8 @@ class Highlight(Gtk.Window):
 
 
     def _draw(self, _wid, ctx):
+        self.borders = {xid: border for xid, border in self.borders.items() if border["alpha"] or border["fade"]}
+        
         ctx.save()
         for xid, border in self.borders.items():
             #get_workspace should not be called here but should be a property of the border
@@ -604,8 +599,6 @@ class Highlight(Gtk.Window):
                     ctx.set_source_rgba(BORDER_R / 255, BORDER_G / 255, BORDER_B / 255, border["alpha"])
                     ctx.set_line_width(BORDER_WIDTH)
                     ctx.stroke()
-
-        self.borders = {xid: border for xid, border in self.borders.items() if border["alpha"] or border["fade"]}
 
         ctx.restore()
 
