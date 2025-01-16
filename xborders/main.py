@@ -375,7 +375,7 @@ class Highlight(Gtk.Window):
         self.connect("destroy", Gtk.main_quit)
         self.connect('composited-changed', self._composited_changed_event)
         self.wnck_screen.connect("active-window-changed", self._active_window_changed_event)
-        # self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event) # TODO: Handle this
+        # self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event) # TODO: Don't handle this, handle resize instead
 
         # Call initial events
         self._composited_changed_event(None)
@@ -414,7 +414,7 @@ class Highlight(Gtk.Window):
         if self.old_window and len(self.old_signals_to_disconnect) > 0:
             is_workspace_same = self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number() if self.wnck_screen.get_active_window() else True
 
-            if FADE and not (DISCARD_INACTIVE_WORKSPACE and not is_workspace_same):
+            if FADE and (is_workspace_same or not DISCARD_INACTIVE_WORKSPACE): # Really buggy
                 self.fade_out_border(self.old_window.get_xid())
             else:
                 print("clear all")
@@ -562,6 +562,7 @@ class Highlight(Gtk.Window):
     
     def draw_border(self, xid):
         if xid in self.borders.keys():
+            self.borders[xid]["fade"] = None
             self.borders[xid]["alpha"] = BORDER_A
             self.queue_draw()
         else:
