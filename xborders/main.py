@@ -5,7 +5,6 @@ import os
 import subprocess
 import threading
 import webbrowser
-import time
 
 import cairo
 import gi
@@ -368,7 +367,6 @@ class Highlight(Gtk.Window):
         self.show_all()
         self.borders = {}
         self.workspace = 0
-        self.fade_called = 0
 
         # Event connection:
         self.connect("draw", self._draw)
@@ -385,7 +383,6 @@ class Highlight(Gtk.Window):
     # This triggers every time the window composited state changes.
     # https://docs.gtk.org/gtk3/signal.Widget.composited-changed.html
     def _composited_changed_event(self, _arg):
-        print("test")
         if self.screen.is_composited():
             self.move(0, 0)
         else:
@@ -401,7 +398,6 @@ class Highlight(Gtk.Window):
         workspace = Wnck.Screen.get_active_workspace(self.wnck_screen)
         windows = Wnck.Screen.get_windows(self.wnck_screen)
         windows_on_workspace = list(filter(lambda w: w.is_visible_on_workspace(workspace), windows))
-        print([window.get_xid() for window in windows_on_workspace])
         return len(windows_on_workspace) == 1
 
     # This event will trigger every active window change, it will queue a border to be drawn and then do nothing.
@@ -417,7 +413,6 @@ class Highlight(Gtk.Window):
             if FADE and (is_workspace_same or not DISCARD_INACTIVE_WORKSPACE): # Really buggy
                 self.fade_out_border(self.old_window.get_xid())
             else:
-                print("clear all")
                 self.clear_borders()
 
             for sig_id in self.old_signals_to_disconnect:
@@ -477,9 +472,9 @@ class Highlight(Gtk.Window):
     def _geometry_changed_event(self, _window_changed):
         active_window = self.wnck_screen.get_active_window()
         if active_window is None or (active_window.get_state() & Wnck.WindowState.FULLSCREEN != 0):
-            self.border_path = [0, 0, 0, 0]
+            self.clear_borders()
         else:
-            self._calc_border_geometry(active_window)
+            self.borders[active_window.get_xid()]["path"] = self._calc_border_geometry(active_window)
         self.queue_draw()
 
     def _calc_border_geometry(self, window):
@@ -520,15 +515,13 @@ class Highlight(Gtk.Window):
 
     def instant_timeout_add(self, interval, function, *params):
         function(*params)
-        GLib.timeout_add(interval, function, *params) # Find out why timeout_add_full is missing, would be a nice option to minimize latency
-        #GLib.timeout_add_full(GLib.PRIORITY_HIGH, interval, function, *params)
+        GLib.timeout_add(interval, function, *params) # Maximum latency of 1 ms, can be set to high priority, but it doesn't make a difference. 
     
     def add_border(self, xid, path):
         if xid not in self.borders.keys():
             self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
     def fade(self):
-        print(round(time.time() * 1000) - self.fade_called)
         for border in self.borders.values():
             if border["fade"] == "in":
                 border["alpha"] = min(border["alpha"] + FADE_IN_STEP, BORDER_A)
@@ -545,7 +538,6 @@ class Highlight(Gtk.Window):
             self.borders[xid]["fade"] = "in"
 
             if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list
-                self.fade_called = round(time.time() * 1000)
                 self.instant_timeout_add(FADE_DELTA, self.fade)
         else:
             raise ValueError("Cannot find border")
@@ -555,7 +547,6 @@ class Highlight(Gtk.Window):
             self.borders[xid]["fade"] = "out"
 
             if len([border for border in self.borders.values() if border["fade"]]) == 1:
-                self.fade_called = round(time.time() * 1000)
                 self.instant_timeout_add(FADE_DELTA, self.fade)
         else:
             raise ValueError("Cannot find border")
@@ -581,7 +572,7 @@ class Highlight(Gtk.Window):
 
 
     def _draw(self, _wid, ctx):
-        ctx.save() 
+        ctx.save()
         for xid, border in self.borders.items():
             #get_workspace should not be called here but should be a property of the border
             if border["path"] != [0, 0, 0, 0] and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: #only draw border if it's in the current workspace
