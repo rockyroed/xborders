@@ -471,8 +471,10 @@ class Highlight(Gtk.Window):
     # the active window, this means the border will get drawn on other windows.
     def _geometry_changed_event(self, _window_changed):
         active_window = self.wnck_screen.get_active_window()
-        if active_window is None or (active_window.get_state() & Wnck.WindowState.FULLSCREEN != 0):
+        if active_window is None:
             self.clear_borders()
+        elif active_window.get_state() & Wnck.WindowState.FULLSCREEN != 0:
+            self.reset_border(active_window.get_xid())
         else:
             self.borders[active_window.get_xid()]["path"] = self._calc_border_geometry(active_window)
         self.queue_draw()
@@ -558,6 +560,17 @@ class Highlight(Gtk.Window):
             self.queue_draw()
         else:
             raise ValueError("Cannot find border")
+        
+
+    def reset_border(self, xid):
+        if xid in self.borders.keys():
+            self.borders[xid]["path"] = [0,0,0,0]
+        else:
+            raise ValueError("Cannot find border")
+                             
+    def reset_borders(self):
+        for border in self.borders.items():
+            border["path"] = [0,0,0,0]
     
     def clear_border(self, xid):
         if xid in self.borders.keys():
