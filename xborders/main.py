@@ -578,12 +578,11 @@ class Highlight(Gtk.Window):
 
 
     def _draw(self, _wid, ctx):
-        self.borders = {xid: border for xid, border in self.borders.items() if border["alpha"] or border["fade"]}
-        
         ctx.save()
+
         for xid, border in self.borders.items():
             #get_workspace should not be called here but should be a property of the border
-            if border["path"] != [0, 0, 0, 0] and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: #only draw border if it's in the current workspace
+            if border["path"] != [0, 0, 0, 0] and border["alpha"] != 0 and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: #only draw border if it's in the current workspace
                 x, y, w, h = border["path"]
                 if BORDER_WIDTH != 0:
                     if BORDER_RADIUS > 0:
@@ -601,6 +600,7 @@ class Highlight(Gtk.Window):
                     ctx.stroke()
 
         ctx.restore()
+        self.borders = {xid: border for xid, border in self.borders.items() if border["alpha"] or border["fade"]}
 
 
 def main():
