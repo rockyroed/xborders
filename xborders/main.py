@@ -375,6 +375,7 @@ class Highlight(Gtk.Window):
         self.connect('composited-changed', self._composited_changed_event)
         self.wnck_screen.connect("active-window-changed", self._active_window_changed_event)
         self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event)
+        self.wnck_screen.connect("window-closed", self._window_closed_event)
 
         # Call initial events
         self._composited_changed_event(None)
@@ -485,6 +486,14 @@ class Highlight(Gtk.Window):
         elif _window_changed.get_xid() in self.borders.keys():
             self.borders[_window_changed.get_xid()]["path"] = self._calc_border_geometry(_window_changed)
         self.queue_draw()
+
+    def _window_closed_event(self, _screen, _window):
+        xid = _window.get_xid()
+        if xid in self.borders.keys():
+            for sig_id in self.old_signals_to_disconnect[xid]:
+                    GObject.signal_handler_disconnect(Wnck.Window.get(xid), sig_id)
+            
+            del self.old_signals_to_disconnect[xid]
 
     def _calc_border_geometry(self, window):
         if (window.get_state() & Wnck.WindowState.FULLSCREEN != 0):
