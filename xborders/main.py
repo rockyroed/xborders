@@ -164,6 +164,7 @@ def get_args():
     )
     parser.add_argument(
         "--fade-out-step",
+        default=0.05,
         type=float,
         help="Opacity change between steps while fading out."
     )
@@ -487,7 +488,7 @@ class Highlight(Gtk.Window):
             self.borders[_window_changed.get_xid()]["path"] = self._calc_border_geometry(_window_changed)
         self.queue_draw()
 
-    def _window_closed_event(self, _screen, _window):
+    def _window_closed_event(self, _screen, _window): # Consider adding the window object to the border list to avoid handling this event
         xid = _window.get_xid()
         if xid in self.borders.keys():
             for sig_id in self.old_signals_to_disconnect[xid]:
@@ -533,7 +534,7 @@ class Highlight(Gtk.Window):
 
     def instant_timeout_add(self, interval, function, *params):
         function(*params)
-        GLib.timeout_add(interval, function, *params) # Maximum latency of 1 ms, can be set to high priority, but it doesn't make a difference. 
+        GLib.timeout_add(interval, function, *params) # Maximum latency of 1 ms, can be set to high priority by passing priority=GLib.PRIORITY_HIGH, but it doesn't make a difference. 
     
     def add_border(self, xid, path):
         if xid not in self.borders.keys():
@@ -560,7 +561,7 @@ class Highlight(Gtk.Window):
         if xid in self.borders.keys() and direction in ["in", "out"]:
             self.borders[xid]["fade"] = direction
 
-            if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list
+            if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list or just define a self.fading bool
                 self.instant_timeout_add(FADE_DELTA, self._fade)
         elif direction not in ["in", "out"]:
             raise ValueError("Direction must be 'in' or 'out'")
