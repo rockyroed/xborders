@@ -374,6 +374,7 @@ class Highlight(Gtk.Window):
         self.connect("destroy", Gtk.main_quit)
         self.connect('composited-changed', self._composited_changed_event)
         self.wnck_screen.connect("active-window-changed", self._active_window_changed_event)
+        self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event)
 
         # Call initial events
         self._composited_changed_event(None)
@@ -453,8 +454,6 @@ class Highlight(Gtk.Window):
 
             border_path = self._calc_border_geometry(active_window)
 
-            self.workspace = active_window.get_workspace().get_number()
-
         if xid and FADE and is_workspace_same: # Makes borders fade in from 0 on workspace change, not good. add_border does check for duplicates though
             self.add_border(xid, border_path)
             self.fade_border(xid, "in")
@@ -463,6 +462,11 @@ class Highlight(Gtk.Window):
             self.draw_border(xid)
         else:
             self.clear_borders()
+
+    def _active_workspace_changed_event(self, _screen, _previous_active_workspace):
+        active_workspace = _screen.get_active_workspace()
+        if active_workspace:
+            self.workspace = active_workspace.get_number()
 
     def _state_changed_event(self, _window_changed, _changed_mask, new_state):
         if new_state & Wnck.WindowState.FULLSCREEN != 0:
