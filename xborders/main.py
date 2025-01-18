@@ -169,13 +169,13 @@ def get_args():
     parser.add_argument(
         "--fade-step",
         type=float,
-        help="Opacity change between steps while fading. Overwrites both fade in and fade out."
+        help="Opacity change between steps while fading. Overrides both fade in and fade out."
     )
     parser.add_argument(
         "--fade-delta",
         default=10,
         type=int,
-        help="The time between steps in fade step, in milliseconds."
+        help="The time between fade steps, in milliseconds."
     )
     parser.add_argument(
         "--discard-inactive-workspace",
@@ -373,7 +373,6 @@ class Highlight(Gtk.Window):
         self.connect("destroy", Gtk.main_quit)
         self.connect('composited-changed', self._composited_changed_event)
         self.wnck_screen.connect("active-window-changed", self._active_window_changed_event)
-        # self.wnck_screen.connect("active-workspace-changed", self._active_workspace_changed_event) # TODO: Don't handle this, handle resize instead
 
         # Call initial events
         self._composited_changed_event(None)
@@ -394,7 +393,7 @@ class Highlight(Gtk.Window):
     old_window = None
     old_signals_to_disconnect = [None, None]
 
-    def is_alone_in_workspace(self):
+    def is_alone_in_workspace(self): # Completely broken on i3
         workspace = Wnck.Screen.get_active_workspace(self.wnck_screen)
         windows = Wnck.Screen.get_windows(self.wnck_screen)
         windows_on_workspace = list(filter(lambda w: w.is_visible_on_workspace(workspace), windows))
@@ -405,12 +404,12 @@ class Highlight(Gtk.Window):
     # https://lazka.github.io/pgi-docs/Wnck-3.0/classes/Screen.html#signals Signals available for the Wnck.Window
     # class: https://lazka.github.io/pgi-docs/Wnck-3.0/classes/Window.html#signals
     def _active_window_changed_event(self, _screen, _previous_active_window):
-        is_workspace_same = True # Ugly
+        is_workspace_same = True
 
         if self.old_window and len(self.old_signals_to_disconnect) > 0:
             is_workspace_same = self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number() if self.wnck_screen.get_active_window() else True
 
-            if FADE and (is_workspace_same or not DISCARD_INACTIVE_WORKSPACE): # Really buggy
+            if FADE and (is_workspace_same or not DISCARD_INACTIVE_WORKSPACE):
                 self.fade_border(self.old_window.get_xid(), "out")
             else:
                 self.clear_borders()
@@ -523,7 +522,10 @@ class Highlight(Gtk.Window):
         if xid not in self.borders.keys():
             self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
+
     def fade(self):
+        fading = 0
+
         for border in self.borders.values():
             if border["fade"] == "in":
                 border["alpha"] = min(border["alpha"] + FADE_IN_STEP, BORDER_A)
@@ -532,8 +534,10 @@ class Highlight(Gtk.Window):
                  border["alpha"] = max(border["alpha"] - FADE_OUT_STEP, 0)
                  border["fade"] = None if border["alpha"] == 0 else "out"
 
+            fading += 1 if border["fade"] else 0
+
         self.queue_draw()
-        return len([border for border in self.borders.values() if border["fade"]])
+        return fading
 
     def fade_border(self, xid, direction):
         if xid in self.borders.keys() and direction in ["in", "out"]:
@@ -582,7 +586,7 @@ class Highlight(Gtk.Window):
 
         for xid, border in self.borders.items():
             #get_workspace should not be called here but should be a property of the border
-            if border["path"] != [0, 0, 0, 0] and border["alpha"] != 0 and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace: #only draw border if it's in the current workspace
+            if border["path"] != [0, 0, 0, 0] and border["alpha"] != 0 and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace:
                 x, y, w, h = border["path"]
                 if BORDER_WIDTH != 0:
                     if BORDER_RADIUS > 0:
