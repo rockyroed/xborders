@@ -5,6 +5,7 @@ import os
 import subprocess
 import threading
 import webbrowser
+from collections import defaultdict
 
 import cairo
 import gi
@@ -391,7 +392,7 @@ class Highlight(Gtk.Window):
 
     # Avoid memory leaks
     old_window = None
-    old_signals_to_disconnect = [None, None]
+    old_signals_to_disconnect = defaultdict(list)
 
     def is_alone_in_workspace(self): # Completely broken on i3
         workspace = Wnck.Screen.get_active_workspace(self.wnck_screen)
@@ -414,10 +415,13 @@ class Highlight(Gtk.Window):
             else:
                 self.clear_borders()
 
-            for sig_id in self.old_signals_to_disconnect:
-                GObject.signal_handler_disconnect(self.old_window, sig_id)
-                
-        self.old_signals_to_disconnect = []
+            for xid, sig_ids in self.old_signals_to_disconnect.items():
+                if xid not in self.borders.keys():
+                    for sig_id in sig_ids:
+                        GObject.signal_handler_disconnect(Wnck.Window.get(xid), sig_id)
+                    self.old_signals_to_disconnect[xid] = None
+        
+        self.old_signals_to_disconnect = defaultdict(list, {xid : sig_id for xid, sig_id in self.old_signals_to_disconnect.items() if sig_id})
         self.old_window = None
 
         active_window = self.wnck_screen.get_active_window()
@@ -439,11 +443,11 @@ class Highlight(Gtk.Window):
                 # Has to be done this way in order to not connect an event
                 # every time the active window changes, thus, drawing unnecesary frames.
                 sig_id = active_window.connect('geometry-changed', self._geometry_changed_event)
-                self.old_signals_to_disconnect.append(sig_id)
+                self.old_signals_to_disconnect[xid].append(sig_id)
 
             if not state_has_event_connected:
                 sig_id = active_window.connect('state-changed', self._state_changed_event)
-                self.old_signals_to_disconnect.append(sig_id)
+                self.old_signals_to_disconnect[xid].append(sig_id)
 
             self.old_window = active_window
 
@@ -460,9 +464,9 @@ class Highlight(Gtk.Window):
         else:
             self.clear_borders()
 
-    def _state_changed_event(self, active_window, _changed_mask, new_state):
+    def _state_changed_event(self, _window_changed, _changed_mask, new_state):
         if new_state & Wnck.WindowState.FULLSCREEN != 0:
-            self._calc_border_geometry(active_window)
+            self._calc_border_geometry(_window_changed)
         self.queue_draw()
 
     # This is weird, "_window_changed" is not necessarily the active window,
@@ -470,12 +474,12 @@ class Highlight(Gtk.Window):
     # the active window, this means the border will get drawn on other windows.
     def _geometry_changed_event(self, _window_changed):
         active_window = self.wnck_screen.get_active_window()
-        if active_window is None:
+        if _window_changed is None:
             self.clear_borders()
-        elif active_window.get_state() & Wnck.WindowState.FULLSCREEN != 0:
-            self.reset_border(active_window.get_xid())
-        else:
-            self.borders[active_window.get_xid()]["path"] = self._calc_border_geometry(active_window)
+        elif _window_changed.get_state() & Wnck.WindowState.FULLSCREEN != 0:
+            self.reset_border(_window_changed.get_xid())
+        elif _window_changed.get_xid() in self.borders.keys():
+            self.borders[_window_changed.get_xid()]["path"] = self._calc_border_geometry(_window_changed)
         self.queue_draw()
 
     def _calc_border_geometry(self, window):
@@ -523,7 +527,7 @@ class Highlight(Gtk.Window):
             self.borders[xid] = {"path": path, "alpha": 0, "fade": None}
 
 
-    def fade(self):
+    def _fade(self):
         fading = 0
 
         for border in self.borders.values():
@@ -544,7 +548,7 @@ class Highlight(Gtk.Window):
             self.borders[xid]["fade"] = direction
 
             if len([border for border in self.borders.values() if border["fade"]]) == 1: # Probably store fading xids in another list
-                self.instant_timeout_add(FADE_DELTA, self.fade)
+                self.instant_timeout_add(FADE_DELTA, self._fade)
         elif direction not in ["in", "out"]:
             raise ValueError("Direction must be 'in' or 'out'")
         else:
