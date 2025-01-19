@@ -1,5 +1,5 @@
 #!/bin/python3
 
 if __name__ == "__main__":
-    from src.main import main
+    from src.xborders.main import main
     main()
