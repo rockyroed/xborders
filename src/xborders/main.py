@@ -635,7 +635,7 @@ def main():
     Gtk.main()
 
 
-if __name__ in  ["__main__", "src.main"]:
+if __name__ in  ["__main__", "xborders.main"]:
     try:
         main()
     except KeyboardInterrupt:
