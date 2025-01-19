@@ -1,4 +1,5 @@
 #!/bin/python3
+
 import argparse
 import json
 import os
@@ -634,7 +635,7 @@ def main():
     Gtk.main()
 
 
-if __name__ == "__main__":
+if __name__ in  ["__main__", "src.main"]:
     try:
         main()
     except KeyboardInterrupt:
