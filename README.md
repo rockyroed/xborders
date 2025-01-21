@@ -23,6 +23,7 @@ Make sure to install dependencies first! `pip install -r requirements.txt`
 * pycairo (Tested with version 1.27.0)
 * requests (Tested with version 2.32.3)
 * pygobject (Tested with version 3.50.0)
+* zc.lockfile (Tested with version 3.0.post1)
 
 **System dependencies**
 * libwnck (Tested with version 40.1-1, Arch: `sudo pacman -S libwnck3` Debian: `sudo apt install libwnck-3-0` NOTE: may need 'libwnck-3-0-dev' for Debian)
