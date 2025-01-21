@@ -457,10 +457,10 @@ class Highlight(Gtk.Window):
 
             border_path = self._calc_border_geometry(active_window)
 
-        if xid and FADE and is_workspace_same: # Makes borders fade in from 0 on workspace change, not good. add_border does check for duplicates though
+        if xid and FADE and is_workspace_same and not self.is_alone_in_workspace(): # Makes borders fade in from 0 on workspace change, not good. add_border does check for duplicates though
             self.add_border(xid, border_path)
             self.fade_border(xid, "in")
-        elif xid:
+        elif xid and not self.is_alone_in_workspace():
             self.add_border(xid, border_path)
             self.draw_border(xid)
         else:
