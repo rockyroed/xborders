@@ -411,9 +411,9 @@ class Highlight(Gtk.Window):
     # class: https://lazka.github.io/pgi-docs/Wnck-3.0/classes/Window.html#signals
     def _active_window_changed_event(self, _screen, _previous_active_window):
         is_workspace_same = True
-
-        if self.old_window and len(self.old_signals_to_disconnect) > 0:
-            is_workspace_same = self.wnck_screen.get_active_window().get_workspace().get_number() == self.old_window.get_workspace().get_number() if self.wnck_screen.get_active_window() else True
+        active_window = self.wnck_screen.get_active_window()
+        if self.old_window and len(self.old_signals_to_disconnect.items()) > 0:
+            is_workspace_same = active_window.is_on_workspace(self.old_window.get_workspace()) if active_window and self.old_window.get_workspace() else True
 
             if FADE and (is_workspace_same or not DISCARD_INACTIVE_WORKSPACE):
                 self.fade_border(self.old_window.get_xid(), "out")
@@ -428,8 +428,6 @@ class Highlight(Gtk.Window):
         
         self.old_signals_to_disconnect = defaultdict(list, {xid : sig_id for xid, sig_id in self.old_signals_to_disconnect.items() if sig_id})
         self.old_window = None
-
-        active_window = self.wnck_screen.get_active_window()
 
         xid = active_window.get_xid() if active_window else 0
 
@@ -458,7 +456,7 @@ class Highlight(Gtk.Window):
 
             border_path = self._calc_border_geometry(active_window)
 
-        if xid and FADE and is_workspace_same and not self.is_alone_in_workspace(): # Makes borders fade in from 0 on workspace change, not good. add_border does check for duplicates though
+        if xid and FADE and is_workspace_same and not self.is_alone_in_workspace():
             self.add_border(xid, border_path)
             self.fade_border(xid, "in")
         elif xid and not self.is_alone_in_workspace():
@@ -470,7 +468,7 @@ class Highlight(Gtk.Window):
     def _active_workspace_changed_event(self, _screen, _previous_active_workspace):
         active_workspace = _screen.get_active_workspace()
         if active_workspace:
-            self.workspace = active_workspace.get_number()
+            self.workspace = active_workspace
 
     def _state_changed_event(self, _window_changed, _changed_mask, new_state):
         if new_state & Wnck.WindowState.FULLSCREEN != 0:
@@ -605,8 +603,7 @@ class Highlight(Gtk.Window):
         ctx.save()
 
         for xid, border in self.borders.items():
-            #get_workspace should not be called here but should be a property of the border
-            if border["path"] != [0, 0, 0, 0] and border["alpha"] != 0 and Wnck.Window.get(xid).get_workspace().get_number() == self.workspace:
+            if border["path"] != [0, 0, 0, 0] and border["alpha"] != 0 and Wnck.Window.get(xid).is_on_workspace(self.workspace):
                 x, y, w, h = border["path"]
                 if BORDER_WIDTH != 0:
                     if BORDER_RADIUS > 0:
