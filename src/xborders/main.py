@@ -7,6 +7,7 @@ import subprocess
 import threading
 import webbrowser
 from collections import defaultdict
+import zc.lockfile
 
 import cairo
 import gi
@@ -637,8 +638,12 @@ def main():
 
 if __name__ in  ["__main__", "xborders.main", "src.xborders.main"]:
     try:
+        lock = zc.lockfile.LockFile('lock')
         main()
     except KeyboardInterrupt:
+        exit(0)
+    except zc.lockfile.LockError:
+        print("ERROR: xborders is already running!")
         exit(0)
 else:
     print(
