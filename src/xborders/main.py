@@ -20,7 +20,7 @@ gi.require_version("GObject", "2.0")
 gi.require_version("GLib", "2.0")
 from gi.repository import Gtk, Gdk, Wnck, GObject, GLib
 
-VERSION = 3.4
+VERSION = 3.5
 
 INSIDE = 'inside'
 OUTSIDE = 'outside'
