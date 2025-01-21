@@ -4,4 +4,4 @@ __pycache__/
 venv
 build
 xborders.egg-info
-lock
+.lock

@@ -638,7 +638,7 @@ def main():
 
 if __name__ in  ["__main__", "xborders.main", "src.xborders.main"]:
     try:
-        lock = zc.lockfile.LockFile('lock')
+        lock = zc.lockfile.LockFile('.lock')
         main()
     except KeyboardInterrupt:
         exit(0)
