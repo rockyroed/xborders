@@ -298,7 +298,7 @@ def notify_about_version(latest_version: float):
             file.write(str(latest_version))
             file.close()
         elif result == 0:
-            webbrowser.open_new_tab("https://github.com/deter0/xborder#updating")
+            webbrowser.open_new_tab("https://github.com/lunegh/xborders#updating")
     else:
         print("something went wrong in notify-send.")
 
@@ -309,7 +309,7 @@ def notify_version():
     try:
         our_location = os.path.dirname(os.path.abspath(__file__))
 
-        url = "https://raw.githubusercontent.com/deter0/xborder/main/version.txt"  # Maybe hardcoding it is a bad idea
+        url = "https://raw.githubusercontent.com/lunegh/xborders/main/version.txt"  # Maybe hardcoding it is a bad idea
         request = requests.get(url, allow_redirects=True)
         latest_version_string = request.content.decode("utf-8")
 
