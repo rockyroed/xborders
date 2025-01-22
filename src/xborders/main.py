@@ -7,11 +7,13 @@ import subprocess
 import threading
 import webbrowser
 from collections import defaultdict
-import zc.lockfile
 
 import cairo
 import gi
 import requests
+import zc.lockfile
+from Xlib import display
+from Xlib.X import AnyPropertyType
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
@@ -328,6 +330,25 @@ def notify_version():
         subprocess.Popen(["notify-send", "--app-name=xborders", "ERROR: xborders couldn't get latest version!"])
 
 
+def get_wm_state(xid):
+    d = display.Display()
+
+    try:
+        window = d.create_resource_object('window', xid)
+        wm_state_atom = d.intern_atom('WM_STATE', True)
+        wm_state = window.get_property(wm_state_atom, AnyPropertyType, 0, 2).value[0]
+
+        wm_states = ["withdrawn", "normal", "iconic"]
+
+        try:
+            state = wm_states[wm_state]
+            return state
+        except:
+            return "No WM_STATE property found"
+            
+    except Exception as e:
+        return f"Error retrieving WM_STATE: {e}"
+
 class Highlight(Gtk.Window):
     def __init__(self, screen_width, screen_height):
         super().__init__(type=Gtk.WindowType.POPUP)
@@ -399,10 +420,10 @@ class Highlight(Gtk.Window):
     old_window = None
     old_signals_to_disconnect = defaultdict(list)
 
-    def is_alone_in_workspace(self): # Completely broken on i3
+    def is_alone_in_workspace(self):
         workspace = Wnck.Screen.get_active_workspace(self.wnck_screen)
         windows = Wnck.Screen.get_windows(self.wnck_screen)
-        windows_on_workspace = list(filter(lambda w: w.is_visible_on_workspace(workspace), windows))
+        windows_on_workspace = list(filter(lambda w: w.is_visible_on_workspace(workspace) and get_wm_state(w.get_xid()) == "normal", windows))
         return len(windows_on_workspace) == 1
 
     # This event will trigger every active window change, it will queue a border to be drawn and then do nothing.
@@ -635,6 +656,7 @@ def main():
 
 if __name__ in  ["__main__", "xborders.main", "src.xborders.main"]:
     try:
+        # use os.path.dirname(os.path.realpath(__file__)) to place .lock in the script's directory
         lock = zc.lockfile.LockFile('.lock')
         main()
     except KeyboardInterrupt:
